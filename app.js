@@ -1,13 +1,20 @@
 'use strict';
 
 const STORAGE_KEY = 'warehouse.v1';
-const UNITS = ['шт', 'уп', 'амп', 'шпц', 'фл', 'мл'];
+const SORT_KEY = 'warehouse.sort';
+const UNITS = ['шт', 'уп', 'амп', 'шприц', 'фл', 'мл'];
 const SOON_DAYS = 30;
+const SORTS = {
+  manual: 'Свой порядок',
+  name: 'По алфавиту',
+  quantity: 'По количеству',
+};
 
 const $ = (sel) => document.querySelector(sel);
 
 let items = load();
-let filter = null; // null | 'low' | 'expiry'
+let filter = null; // null | 'low'
+let sortMode = loadSort();
 let query = '';
 let editingId = null;
 let adjustingId = null;
@@ -20,6 +27,15 @@ function load() {
     return Array.isArray(data) ? data.map(normalize).filter(Boolean) : [];
   } catch {
     return [];
+  }
+}
+
+function loadSort() {
+  try {
+    const mode = localStorage.getItem(SORT_KEY);
+    return mode in SORTS ? mode : 'manual';
+  } catch {
+    return 'manual';
   }
 }
 
@@ -37,7 +53,7 @@ function normalize(raw) {
     id: String(raw.id || uid()),
     name: raw.name.trim(),
     quantity: Math.max(0, toNumber(raw.quantity) ?? 0),
-    unit: UNITS.includes(raw.unit) ? raw.unit : UNITS[0],
+    unit: typeof raw.unit === 'string' && raw.unit.trim() ? raw.unit.trim() : UNITS[0],
     minQuantity: toNumber(raw.minQuantity),
     expiryDate: /^\d{4}-\d{2}-\d{2}$/.test(raw.expiryDate) ? raw.expiryDate : null,
     createdAt: raw.createdAt || new Date().toISOString(),
@@ -88,11 +104,6 @@ function expiryStatus(item) {
   if (days < 0) return 'expired';
   if (days <= SOON_DAYS) return 'soon';
   return 'ok';
-}
-
-function hasExpiryIssue(item) {
-  const s = expiryStatus(item);
-  return s === 'expired' || s === 'soon';
 }
 
 /* ---------- Форматирование ---------- */
@@ -156,6 +167,9 @@ function cardElement(item) {
   li.dataset.id = item.id;
   const name = escapeHtml(item.name);
   li.innerHTML = `
+    <div class="handle" aria-label="Перетащить">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16v2H4zm0 4h16v2H4zm0 4h16v2H4z"/></svg>
+    </div>
     <div class="card-main" data-action="edit">
       <p class="card-name">${name}</p>
       <div class="badges">${badgesHtml(item)}</div>
@@ -171,13 +185,17 @@ function cardElement(item) {
   return li;
 }
 
-function sortKey(item) {
-  // Сначала проблемные позиции, потом по алфавиту
-  let score = 0;
-  if (expiryStatus(item) === 'expired') score += 4;
-  if (isLow(item)) score += 2;
-  if (expiryStatus(item) === 'soon') score += 1;
-  return score;
+const byName = (a, b) => a.name.localeCompare(b.name, 'ru');
+
+const comparators = {
+  manual: () => 0, // порядок массива items и есть свой порядок
+  name: byName,
+  quantity: (a, b) => a.quantity - b.quantity || byName(a, b),
+};
+
+/** Перетаскивать можно только в своём порядке и когда видны все позиции. */
+function canDrag() {
+  return sortMode === 'manual' && !filter && !query.trim();
 }
 
 function render() {
@@ -187,10 +205,10 @@ function render() {
   const visible = items
     .filter((it) => !q || it.name.toLocaleLowerCase('ru').includes(q))
     .filter((it) => filter !== 'low' || isLow(it))
-    .filter((it) => filter !== 'expiry' || hasExpiryIssue(it))
-    .sort((a, b) => sortKey(b) - sortKey(a) || a.name.localeCompare(b.name, 'ru'));
+    .sort(comparators[sortMode]);
 
   list.replaceChildren(...visible.map(cardElement));
+  list.classList.toggle('can-drag', canDrag() && visible.length > 1);
 
   $('#empty').hidden = items.length > 0;
   $('#noResults').hidden = items.length === 0 || visible.length > 0;
@@ -199,12 +217,10 @@ function render() {
 
 function renderSummary() {
   const low = items.filter(isLow).length;
-  const exp = items.filter(hasExpiryIssue).length;
   $('#lowCount').textContent = low;
-  $('#expCount').textContent = exp;
   $('.chip-low').classList.toggle('zero', low === 0);
-  $('.chip-exp').classList.toggle('zero', exp === 0);
-  document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c.dataset.filter === filter));
+  $('.chip-low').classList.toggle('active', filter === 'low');
+  $('#sortValue').textContent = SORTS[sortMode];
 
   const n = items.length;
   $('#subtitle').textContent = n ? `${n} ${plural(n, 'позиция', 'позиции', 'позиций')}` : 'Учёт препаратов';
@@ -264,12 +280,115 @@ $('#search').addEventListener('input', (e) => {
   render();
 });
 
-$('#chips').addEventListener('click', (e) => {
-  const chip = e.target.closest('.chip');
-  if (!chip) return;
-  filter = filter === chip.dataset.filter ? null : chip.dataset.filter;
+$('.chip-low').addEventListener('click', () => {
+  filter = filter === 'low' ? null : 'low';
   render();
 });
+
+/* ---------- Сортировка ---------- */
+
+const sortMenu = $('#sortMenu');
+sortMenu.innerHTML = Object.entries(SORTS)
+  .map(([mode, label]) => `<button type="button" class="menu-item" data-sort="${mode}">${label}<span class="check">✓</span></button>`)
+  .join('');
+
+$('#sortBtn').addEventListener('click', () => {
+  sortMenu.querySelectorAll('[data-sort]').forEach((b) => b.classList.toggle('selected', b.dataset.sort === sortMode));
+  openSheet($('#sortSheet'));
+});
+
+sortMenu.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-sort]');
+  if (!btn) return;
+  sortMode = btn.dataset.sort;
+  try {
+    localStorage.setItem(SORT_KEY, sortMode);
+  } catch {}
+  render();
+  closeSheet($('#sortSheet'));
+});
+
+/* ---------- Перетаскивание ---------- */
+
+const list = $('#list');
+let drag = null;
+
+list.addEventListener('pointerdown', (e) => {
+  const handle = e.target.closest('.handle');
+  if (!handle || !list.classList.contains('can-drag')) return;
+  e.preventDefault();
+  handle.setPointerCapture(e.pointerId);
+  const card = handle.closest('.card');
+  card.classList.add('dragging');
+  drag = { card, startY: e.clientY, lastY: e.clientY, raf: requestAnimationFrame(autoScroll) };
+  if (navigator.vibrate) navigator.vibrate(10);
+});
+
+list.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  drag.lastY = e.clientY;
+  moveDrag();
+});
+
+list.addEventListener('pointerup', endDrag);
+list.addEventListener('pointercancel', endDrag);
+
+function moveDrag() {
+  const { card } = drag;
+  card.style.transform = `translateY(${drag.lastY - drag.startY}px)`;
+
+  const rect = card.getBoundingClientRect();
+  const mid = rect.top + rect.height / 2;
+  const prev = card.previousElementSibling;
+  const next = card.nextElementSibling;
+  const midOf = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.top + r.height / 2;
+  };
+
+  let before;
+  if (prev && mid < midOf(prev)) before = prev;
+  else if (next && mid > midOf(next)) before = next.nextElementSibling;
+  else return;
+
+  // Карточка переезжает в DOM; сдвигаем точку отсчёта, чтобы она осталась под пальцем
+  const top = card.offsetTop;
+  list.insertBefore(card, before);
+  drag.startY += card.offsetTop - top;
+  card.style.transform = `translateY(${drag.lastY - drag.startY}px)`;
+}
+
+/** Прокручивает страницу, если палец держат у верхнего или нижнего края. */
+function autoScroll() {
+  if (!drag) return;
+  const topEdge = $('.top').getBoundingClientRect().bottom + 60;
+  const bottomEdge = window.innerHeight - 80;
+  let speed = 0;
+  if (drag.lastY < topEdge) speed = -Math.min(16, (topEdge - drag.lastY) / 4);
+  else if (drag.lastY > bottomEdge) speed = Math.min(16, (drag.lastY - bottomEdge) / 4);
+  if (speed) {
+    const before = window.scrollY;
+    window.scrollBy(0, speed);
+    drag.startY -= window.scrollY - before;
+    moveDrag();
+  }
+  drag.raf = requestAnimationFrame(autoScroll);
+}
+
+function endDrag() {
+  if (!drag) return;
+  cancelAnimationFrame(drag.raf);
+  drag.card.classList.remove('dragging');
+  drag.card.style.transform = '';
+  drag = null;
+
+  const order = [...list.children].map((li) => li.dataset.id);
+  const changed = order.some((id, i) => items[i].id !== id);
+  if (changed) {
+    items = order.map(find);
+    save();
+  }
+}
 
 $('#addBtn').addEventListener('click', () => openItem(null));
 $('#emptyAdd').addEventListener('click', () => openItem(null));
@@ -309,7 +428,9 @@ function openItem(item) {
   $('#deleteBtn').hidden = !item;
   itemForm.name.value = item ? item.name : '';
   itemForm.quantity.value = item ? inputNum(item.quantity) : '';
-  itemForm.unit.value = item ? item.unit : UNITS[0];
+  const unit = item ? item.unit : UNITS[0];
+  if (![...itemForm.unit.options].some((o) => o.value === unit)) itemForm.unit.add(new Option(unit, unit));
+  itemForm.unit.value = unit;
   itemForm.minQuantity.value = item && item.minQuantity !== null ? inputNum(item.minQuantity) : '';
   itemForm.expiryDate.value = item && item.expiryDate ? item.expiryDate : '';
   openSheet($('#itemSheet'));

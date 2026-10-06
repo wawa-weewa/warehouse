@@ -113,10 +113,15 @@ h1 { margin: 4px 0 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em
 .chip-count { font-size: 24px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .chip-label { font-size: 13px; color: var(--muted); }
 .chip-low .chip-count { color: var(--red); }
-.chip-exp .chip-count { color: var(--orange); }
 .chip.zero .chip-count { color: var(--muted); }
 .chip-low.active { outline-color: var(--red); background: var(--red-soft); }
-.chip-exp.active { outline-color: var(--orange); background: var(--orange-soft); }
+.chip-value {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 26px;
+  color: var(--accent); fill: var(--accent);
+  font-size: 17px; font-weight: 600;
+  white-space: nowrap;
+}
 
 /* ---------- Список ---------- */
 
@@ -142,6 +147,28 @@ main { padding: 6px 16px 0; }
 .card.is-low::before { background: var(--red); }
 .card.is-soon:not(.is-low)::before { background: var(--orange); }
 .card.is-expired::before { background: var(--red); }
+
+.handle {
+  display: none;
+  align-self: stretch;
+  align-items: center;
+  margin: -14px -4px -14px -6px;
+  padding: 0 4px 0 6px;
+  fill: var(--muted);
+  opacity: 0.6;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  cursor: grab;
+}
+.can-drag .handle { display: flex; }
+
+.card.dragging {
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  scale: 1.02;
+  transition: scale 0.15s, box-shadow 0.15s;
+}
 
 .card-main { flex: 1; min-width: 0; cursor: pointer; }
 .card-name {
@@ -307,6 +334,8 @@ main { padding: 6px 16px 0; }
 .menu-item { display: block; width: 100%; text-align: left; padding: 14px 16px; color: var(--accent); }
 .menu-item + .menu-item { border-top: 0.5px solid var(--sep); }
 .menu-item:active { background: var(--field); }
+.menu-item .check { float: right; visibility: hidden; font-weight: 600; }
+.menu-item.selected .check { visibility: visible; }
 
 /* ---------- Уведомление ---------- */
 
