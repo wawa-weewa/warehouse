@@ -1,7 +1,7 @@
 'use strict';
 
 const STORAGE_KEY = 'warehouse.v1';
-const UNITS = ['шт', 'уп', 'амп', 'фл', 'таб', 'мл', 'г'];
+const UNITS = ['шт', 'уп', 'амп', 'шпц', 'фл', 'мл'];
 const SOON_DAYS = 30;
 
 const $ = (sel) => document.querySelector(sel);

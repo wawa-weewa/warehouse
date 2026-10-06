@@ -1,5 +1,5 @@
 // При изменении файлов приложения увеличьте версию, чтобы телефон загрузил обновление
-const CACHE = 'warehouse-v1';
+const CACHE = 'warehouse-v2';
 const ASSETS = [
   './',
   'index.html',
