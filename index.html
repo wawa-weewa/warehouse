@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Склад препаратов</title>
+  <meta name="description" content="Учёт остатков препаратов на складе">
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Склад">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-row">
+      <div>
+        <h1>Склад</h1>
+        <p class="subtitle" id="subtitle"></p>
+      </div>
+      <button class="icon-btn" id="settingsBtn" aria-label="Настройки">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      </button>
+    </div>
+    <label class="search">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 0 1 5.2 10.4l4.4 4.4-1.4 1.4-4.4-4.4A6.5 6.5 0 1 1 10.5 4Zm0 2a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z"/></svg>
+      <input type="search" id="search" placeholder="Поиск" autocomplete="off" enterkeyhint="search">
+    </label>
+    <div class="chips" id="chips">
+      <button class="chip chip-low" data-filter="low">
+        <span class="chip-count" id="lowCount">0</span>
+        <span class="chip-label">Мало на складе</span>
+      </button>
+      <button class="chip chip-exp" data-filter="expiry">
+        <span class="chip-count" id="expCount">0</span>
+        <span class="chip-label">Срок годности</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <ul class="list" id="list"></ul>
+    <div class="empty" id="empty" hidden>
+      <div class="empty-icon">💊</div>
+      <h2>Склад пока пуст</h2>
+      <p>Добавьте первый препарат, чтобы начать учёт остатков.</p>
+      <button class="btn btn-primary" id="emptyAdd">Добавить препарат</button>
+    </div>
+    <p class="no-results" id="noResults" hidden>Ничего не найдено</p>
+  </main>
+
+  <button class="fab" id="addBtn" aria-label="Добавить препарат">
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+  </button>
+
+  <!-- Добавление / редактирование -->
+  <div class="sheet-backdrop" id="itemSheet" hidden>
+    <form class="sheet" id="itemForm" novalidate>
+      <div class="sheet-head">
+        <button type="button" class="link-btn" data-close>Отмена</button>
+        <h3 id="itemTitle">Новый препарат</h3>
+        <button type="submit" class="link-btn strong">Готово</button>
+      </div>
+      <div class="group">
+        <label class="field">
+          <span>Название</span>
+          <input name="name" type="text" required autocomplete="off" autocapitalize="sentences" placeholder="Например, Амоксициллин 500 мг">
+        </label>
+      </div>
+      <div class="group">
+        <label class="field">
+          <span>Количество</span>
+          <input name="quantity" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+        </label>
+        <label class="field">
+          <span>Единица</span>
+          <select name="unit"></select>
+        </label>
+      </div>
+      <div class="group">
+        <label class="field">
+          <span>Мин. остаток</span>
+          <input name="minQuantity" type="text" inputmode="decimal" autocomplete="off" placeholder="Не задан">
+        </label>
+        <label class="field">
+          <span>Годен до</span>
+          <input name="expiryDate" type="date">
+        </label>
+      </div>
+      <p class="hint">Если остаток станет меньше или равен минимальному, препарат подсветится. Сроки годности, которые истекают в ближайшие 30 дней, тоже подсвечиваются.</p>
+      <button type="button" class="btn btn-danger" id="deleteBtn" hidden>Удалить препарат</button>
+    </form>
+  </div>
+
+  <!-- Приход / расход -->
+  <div class="sheet-backdrop" id="adjustSheet" hidden>
+    <form class="sheet" id="adjustForm" novalidate>
+      <div class="sheet-head">
+        <button type="button" class="link-btn" data-close>Отмена</button>
+        <h3>Изменить остаток</h3>
+        <span class="link-btn placeholder">Готово</span>
+      </div>
+      <p class="adjust-name" id="adjustName"></p>
+      <p class="adjust-current" id="adjustCurrent"></p>
+      <div class="group">
+        <label class="field">
+          <span>Количество</span>
+          <input name="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+        </label>
+      </div>
+      <div class="adjust-actions">
+        <button type="button" class="btn btn-minus" data-dir="-1">− Расход</button>
+        <button type="button" class="btn btn-plus" data-dir="1">+ Приход</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Настройки -->
+  <div class="sheet-backdrop" id="settingsSheet" hidden>
+    <div class="sheet">
+      <div class="sheet-head">
+        <span class="link-btn placeholder">Отмена</span>
+        <h3>Данные</h3>
+        <button type="button" class="link-btn strong" data-close>Готово</button>
+      </div>
+      <p class="hint">Данные хранятся только на этом устройстве. Время от времени сохраняйте резервную копию, например в «Файлы» или iCloud Drive.</p>
+      <div class="menu">
+        <button type="button" class="menu-item" id="exportBtn">Сохранить резервную копию</button>
+        <button type="button" class="menu-item" id="importBtn">Восстановить из копии</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
